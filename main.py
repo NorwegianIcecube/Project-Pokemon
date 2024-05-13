@@ -20,7 +20,7 @@ for e in range(EPOCHS):
 
     battle_logs = []
     for i in range(BATTLES_PER_EPOCH):#//2):
-        print(e, i)
+        #print(e, i)
         player1.select_pokemon(player2.team)
         player2.select_pokemon(player1.team)
         battle = Battle(player1, player2)

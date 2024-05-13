@@ -1,6 +1,6 @@
 import random
 import numpy as np
-
+import time
 
 class Battle:
     def __init__(self, player1, player2):
@@ -18,11 +18,12 @@ class Battle:
         
 
     def run(self):
+        start_time = time.time()
         self.trick_room = False
         self.trick_room_turns = 0
+        log_printed = False
         while self.winner is None:
             self.turn += 1
-            print(f"Turn {self.turn}")
             p1_action_1 = self.player1.choose_action(self.log, self._get_legal_actions(self.player1, 0))
             p1_action_2 = self.player1.choose_action(self.log, self._get_legal_actions(self.player1, 1))
             p2_action_1 = self.player2.choose_action(self.log, self._get_legal_actions(self.player2, 0))
@@ -32,11 +33,24 @@ class Battle:
             self._execute_actions(execute_order)
             self._end_of_round_effects()
 
+            self.printing = False
+            if time.time() - start_time > 10:
+                self.printing = True
+
+            if self.printing and log_printed == False:
+                print(self.log)
+                log_printed = True
+
+            #if self.printing:
+                print([(p, p.hp) for p in self.player1.selected_pokemon], [self.p1_battlefield_slots[0], self.p1_battlefield_slots[0].hp if self.p1_battlefield_slots[0] != None else None, self.p1_battlefield_slots[1], self.p1_battlefield_slots[1].hp if self.p1_battlefield_slots[1] != None else None])
+                print([(p, p.hp) for p in self.player2.selected_pokemon], [self.p2_battlefield_slots[0], self.p2_battlefield_slots[0].hp if self.p2_battlefield_slots[0] != None else None, self.p2_battlefield_slots[1], self.p2_battlefield_slots[1].hp if self.p2_battlefield_slots[1] != None else None])
+                print(execute_order)
+
             #if self.log != []:
             #    print(self.log)
             #    if self.log[0][0] > 100:
-            print([(p, p.hp) for p in self.player1.selected_pokemon], [self.p1_battlefield_slots[0], self.p1_battlefield_slots[0].hp if self.p1_battlefield_slots[0] != None else None, self.p1_battlefield_slots[1], self.p1_battlefield_slots[1].hp if self.p1_battlefield_slots[1] != None else None])
-            print([(p, p.hp) for p in self.player2.selected_pokemon], [self.p2_battlefield_slots[0], self.p2_battlefield_slots[0].hp if self.p2_battlefield_slots[0] != None else None, self.p2_battlefield_slots[1], self.p2_battlefield_slots[1].hp if self.p2_battlefield_slots[1] != None else None])
+            #       print([(p, p.hp) for p in self.player1.selected_pokemon], [self.p1_battlefield_slots[0], self.p1_battlefield_slots[0].hp if self.p1_battlefield_slots[0] != None else None, self.p1_battlefield_slots[1], self.p1_battlefield_slots[1].hp if self.p1_battlefield_slots[1] != None else None])
+            #       print([(p, p.hp) for p in self.player2.selected_pokemon], [self.p2_battlefield_slots[0], self.p2_battlefield_slots[0].hp if self.p2_battlefield_slots[0] != None else None, self.p2_battlefield_slots[1], self.p2_battlefield_slots[1].hp if self.p2_battlefield_slots[1] != None else None])
             #self.log = []
 
         if self.winner == self.player1:
@@ -54,27 +68,28 @@ class Battle:
         battlfefield_slots = self._get_battlefield_slots(player)
         if battlfefield_slots[pokemon_slot] == None:
             return actions
-        has_legal_move = False
         
         opposing_player = self._get_opposing_player(player)
         opposing_battlfefield_slots = self._get_battlefield_slots(opposing_player)
         for m in battlfefield_slots[pokemon_slot].moves:
-            if m.pp > 0:
-                has_legal_move = True
-                if m.legal_targets == "target":
-                    if battlfefield_slots[-1-pokemon_slot] != None:
-                        actions.append(("move", battlfefield_slots[pokemon_slot], m, battlfefield_slots[-1-pokemon_slot]))
-                    if opposing_battlfefield_slots[pokemon_slot] != None:
-                        actions.append(("move", battlfefield_slots[pokemon_slot], m, opposing_battlfefield_slots[pokemon_slot]))
-                    if opposing_battlfefield_slots[-1-pokemon_slot] != None:
-                        actions.append(("move", battlfefield_slots[pokemon_slot], m, opposing_battlfefield_slots[-1-pokemon_slot]))
-                elif m.legal_targets == "self":
-                    actions.append(("move", battlfefield_slots[pokemon_slot], m, battlfefield_slots[pokemon_slot]))
-                elif m.legal_targets == "all_other":
-                    actions.append(("move", battlfefield_slots[pokemon_slot], m, (battlfefield_slots[-1-pokemon_slot], opposing_battlfefield_slots[pokemon_slot], opposing_battlfefield_slots[-1-pokemon_slot])))
-                elif m.legal_targets == "all_adjacent_allies":
+            if m.pp == 0:
+                continue
+            if m.legal_targets == "target":
+                if battlfefield_slots[-1-pokemon_slot] != None:
                     actions.append(("move", battlfefield_slots[pokemon_slot], m, battlfefield_slots[-1-pokemon_slot]))
-        if not has_legal_move:
+                if opposing_battlfefield_slots[pokemon_slot] != None:
+                    actions.append(("move", battlfefield_slots[pokemon_slot], m, opposing_battlfefield_slots[pokemon_slot]))
+                if opposing_battlfefield_slots[-1-pokemon_slot] != None:
+                    actions.append(("move", battlfefield_slots[pokemon_slot], m, opposing_battlfefield_slots[-1-pokemon_slot]))
+            elif m.legal_targets == "self":
+                actions.append(("move", battlfefield_slots[pokemon_slot], m, battlfefield_slots[pokemon_slot]))
+            elif m.legal_targets == "all_other":
+                actions.append(("move", battlfefield_slots[pokemon_slot], m, (battlfefield_slots[-1-pokemon_slot], opposing_battlfefield_slots[pokemon_slot], opposing_battlfefield_slots[-1-pokemon_slot])))
+            elif m.legal_targets == "all_adjacent_allies":
+                if battlfefield_slots[pokemon_slot-1] != None:
+                    actions.append(("move", battlfefield_slots[pokemon_slot], m, battlfefield_slots[pokemon_slot-1]))
+    
+        if actions == []:
             # Struggle is a move
             if opposing_battlfefield_slots[pokemon_slot] != None:
                 actions.append(("move", battlfefield_slots[pokemon_slot], moves[-1], opposing_battlfefield_slots[pokemon_slot]))
@@ -86,7 +101,6 @@ class Battle:
             if p.hp > 0 and p != battlfefield_slots[0] and p != battlfefield_slots[1]:
                 actions.append(("switch", battlfefield_slots[pokemon_slot], p))
 
-        print(actions)
         return actions
 
     def _order_actions(self, p1_action_1, p1_action_2, p2_action_1, p2_action_2):
@@ -142,7 +156,6 @@ class Battle:
                 self._execute_switch(a[1], a[2])
 
     def _execute_move(self, pokemon, move, target):
-        print("executing move")
         if pokemon.hp <= 0:
             return
         
@@ -263,9 +276,14 @@ class Battle:
                 pass
             elif move.effect[0] == "helping_hand":
                 if self._get_battlefield_slots(pokemon.trainer)[0] == pokemon:
-                    self._get_battlefield_slots(pokemon.trainer)[1].helping_hand = True
+                    ally = self._get_battlefield_slots(pokemon.trainer)[1]
+                    if ally != None:
+                        ally.helping_hand = True
                 else:
-                    self._get_battlefield_slots(pokemon.trainer)[0].helping_hand = True
+                    ally = self._get_battlefield_slots(pokemon.trainer)[0]
+                    if ally != None:
+                        ally.helping_hand = True
+                self.log.append((self.turn, f"{pokemon.player}:move", pokemon, move.name, ally))
             elif move.effect[0] == "taunt":
                 if "taunt" not in target.status:
                     target.status.append("taunt")
@@ -305,7 +323,6 @@ class Battle:
         self._check_win()  
 
     def _execute_switch(self, pokemon, new_pokemon):
-        print("executing switch")
         battlefield_slots = self._get_battlefield_slots(pokemon.trainer)
         illegal_switch = self._check_switch_illegal(pokemon, new_pokemon)
         if illegal_switch:
@@ -388,7 +405,13 @@ class Battle:
         else:
             burn = 1
 
-        damage = ((22*move.power*(attack/defense))/50 + 2)*stab*type_effectiveness*(random.randint(85, 100)/100)*burn  
+        if attacker.helping_hand:
+            helping_hand = 1.5
+        else:
+            helping_hand = 1
+
+        damage = ((22*move.power*(attack/defense))/50 + 2)*stab*type_effectiveness*(random.randint(85, 100)/100)*burn*helping_hand
+        attacker.helping_hand = False
 
         if move.effect != None:
             if move.effect[0] == "multiple_hits":
@@ -428,7 +451,6 @@ class Battle:
             return self.p2_battlefield_slots
 
     def _check_win(self):
-        print("checking win")
         p1_win = True
         p2_win = True
         for p in self.player1.selected_pokemon:
@@ -446,7 +468,6 @@ class Battle:
             self.winner = self.player2
             
     def _end_of_round_effects(self):
-        print("end of round effects")
         for battlefield_side in [self.p1_battlefield_slots, self.p2_battlefield_slots]:
             for p in battlefield_side:
                 if p == None:
@@ -586,7 +607,7 @@ class Move:
         self.pp = pp
         self.effect = effect
         self.priority = priority
-        # Types of targets = ["target, self", "all_adjacent", "all_opponents", "all_other", "all_adjacent_opponents", "all_adjacent_allies", "all_adjacent_other", "all_adjacent_opponents_other", "all_adjacent_allies_other", "all_adjacent_opponents_allies", "all_adjacent_opponents_allies_other"]
+        # Types of targets = ["target", "self", "all_adjacent", "all_opponents", "all_other", "all_adjacent_opponents", "all_adjacent_allies", "all_adjacent_other", "all_adjacent_opponents_other", "all_adjacent_allies_other", "all_adjacent_opponents_allies", "all_adjacent_opponents_allies_other"]
         self.legal_targets = legal_targets
 
     def copy(self):
