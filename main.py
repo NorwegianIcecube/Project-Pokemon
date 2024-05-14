@@ -2,8 +2,8 @@ import random
 import numpy as np
 import pickle
 #import shap
-from environment import Battle, Pokemon, pokemon_entries, moves
-from PokemonMasterAI import PokemonMasterAI
+from environment import Battle
+from pokemon_master_AI import PokemonMasterAI
 from random_agent import RandomPlayer
 
 player1 = PokemonMasterAI()
@@ -34,8 +34,8 @@ for e in range(EPOCHS):
     total_p1_wins += player1.wins
     total_p2_wins += player2.wins
 
-    player1.train(battle_logs)
-    player2.train(battle_logs)
+    player1.train(battle_logs, BATTLES_PER_EPOCH)
+    player2.train(battle_logs, BATTLES_PER_EPOCH)
 
 print(f"p1 win percentage: {total_p1_wins / (EPOCHS * BATTLES_PER_EPOCH)}")
 print(f"p2 win percentage: {total_p2_wins / (EPOCHS * BATTLES_PER_EPOCH)}")

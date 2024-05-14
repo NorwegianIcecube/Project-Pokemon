@@ -2,7 +2,7 @@ import random
 import numpy as np
 import pickle
 import shap
-from environment import Battle, Pokemon, pokemon_entries, moves
+from environment import Pokemon, pokemon_entries, moves
 
 class PokemonMasterAI:
     def __init__(self):
@@ -30,7 +30,7 @@ class PokemonMasterAI:
             return None
         return random.choice(available_actions)
 
-    def train(self, logs):
+    def train(self, logs, battles_per_epoch):
         # do something
         self.wins = 0
         pass
