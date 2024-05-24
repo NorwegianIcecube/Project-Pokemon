@@ -15,11 +15,11 @@ class PokemonMasterAI:
         return "PokemonMasterAI"
 
     def choose_pokemon(self):
-        self.team_pokemon = random.sample(pokemon_entries, 6)
+        self.team_pokemon = random.sample(POKEMON_ENTRIES, 6)
         for p in self.team_pokemon:
             p = p[0]
             moveset = random.sample(p.moves, 4)
-            moveset = [m.copy() for m in moves if m.name in moveset]
+            moveset = [m.copy() for m in MOVES if m.name in moveset]
             self.team.append(Pokemon(p, moveset, self))
 
     def select_pokemon(self, opponent_pokemon):
