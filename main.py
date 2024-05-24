@@ -5,9 +5,10 @@ import pickle
 from environment import Battle
 from pokemon_master_AI import PokemonMasterAI
 from random_agent import RandomPlayer
+from best_move_enemy_target import SelectBestMoveAgent
 
 player1 = PokemonMasterAI()
-player2 = RandomPlayer()
+player2 = SelectBestMoveAgent() #RandomPlayer()
 
 EPOCHS = 1000
 BATTLES_PER_EPOCH = 1000
