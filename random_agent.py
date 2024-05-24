@@ -27,7 +27,7 @@ class RandomPlayer:
             return None
         return random.choice(available_actions)
 
-    def train(self, logs):
+    def train(self, logs, battles_per_epoch):
         # do something
         self.wins = 0
         pass

@@ -7,11 +7,12 @@ from pokemon_master_AI import PokemonMasterAI
 from random_agent import RandomPlayer
 from best_move_enemy_target import SelectBestMoveAgent
 
-player1 = PokemonMasterAI()
-player2 = SelectBestMoveAgent() #RandomPlayer()
+#player1 = PokemonMasterAI()
+player1 = SelectBestMoveAgent()
+player2 = RandomPlayer()
 
-EPOCHS = 1000
-BATTLES_PER_EPOCH = 1000
+EPOCHS = 100
+BATTLES_PER_EPOCH = 100
 
 total_p1_wins = 0
 total_p2_wins = 0
