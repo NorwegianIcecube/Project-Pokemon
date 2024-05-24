@@ -1,5 +1,5 @@
 import random
-from environment import Pokemon, pokemon_entries, moves
+from environment import Pokemon, POKEMON_ENTRIES, MOVES
 
 class SelectBestMoveAgent:
     def __init__(self):

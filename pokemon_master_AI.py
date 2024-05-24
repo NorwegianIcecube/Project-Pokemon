@@ -2,7 +2,7 @@ import random
 import numpy as np
 import pickle
 import shap
-from environment import Pokemon, pokemon_entries, moves
+from environment import Pokemon, POKEMON_ENTRIES, MOVES
 
 class PokemonMasterAI:
     def __init__(self):
