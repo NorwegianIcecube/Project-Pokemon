@@ -2,7 +2,7 @@ import random
 import numpy as np
 import numpy as np
 
-STATE_DIM = 869
+STATE_DIM = 1000
 ACTION_DIM = 91
 BATTLES_PER_EPOCH = 100
 
@@ -62,6 +62,8 @@ class Pokemon:
         pokemon.taunt_turns = self.taunt_turns
         pokemon.helping_hand = self.helping_hand
         pokemon.first_action_taken = self.first_action_taken
+        for i, m in enumerate(pokemon.moves):
+            m.pp = self.moves[i].pp
         return pokemon
 
     def __repr__(self):
@@ -129,7 +131,7 @@ class Move:
         return self.name == other.name
 
     def __hash__(self):
-        return hash(self.name)
+        return hash(self.name+str(self.pp))
 
     def __str__(self):
         return self.name
@@ -179,7 +181,7 @@ MOVES = [
     Move("Weather Ball", 50, 100, "Normal", "Special", 10),
     Move("Hurricane", 110, 70, "Flying", "Special", 10),
     Move("Tailwind", 0, 100, "Flying", "Status", 15, effect=("tailwind"), legal_targets="self"),
-    Move("U-turn", 70, 100, "Bug", "Physical", 20, effect=("switch")),
+    Move("U-turn-est", 70, 100, "Bug", "Physical", 20, effect=("switch")),
     Move("Wide Guard", 0, 100, "Rock", "Status", 10, effect=("wide_guard"), legal_targets="self", priority=3),
     Move("Surging Strikes", 25, 100, "Water", "Physical", 5, effect=("multiple_hits", 3)),
     Move("Aqua Jet", 40, 100, "Water", "Physical", 20, priority=1),
@@ -220,7 +222,7 @@ pelipper = PokemonEntry("Pelipper", 60, 50, 100, 95, 70, 65, ["Weather Ball", "H
 urshifu_rapid_strike = PokemonEntry("Urshifu", 100, 130, 100, 63, 60, 97, ["Surging Strikes", "Aqua Jet", "Close Combat", "Ice Punch", "Poison Jab", "Protect"], "Water", "Fighting"),
 kyogre = PokemonEntry("Kyogre", 100, 100, 90, 150, 140, 90, ["Water Spout", "Origin Pulse", "Ice Beam", "Thunder", "Protect", "Wide Guard"], "Water"),
 groudon = PokemonEntry("Groudon", 100, 150, 140, 100, 90, 90, ["Precipice Blades", "Fire Punch", "Rock Slide", "Thunder Punch", "Protect", "Wide Guard"], "Ground"),
-rillaboom = PokemonEntry("Rillaboom", 100, 125, 90, 60, 70, 85, ["Grassy Glide", "Wood Hammer", "High Horsepower", "U-turn", "Protect"], "Grass"),
+rillaboom = PokemonEntry("Rillaboom", 100, 125, 90, 60, 70, 85, ["Grassy Glide", "Wood Hammer", "High Horsepower", "U-turn-est", "Protect"], "Grass"),
 torkoal = PokemonEntry("Torkoal", 70, 85, 140, 85, 70, 20, ["Eruption", "Heat Wave", "Solar Beam", "Protect", "Yawn"], "Fire"),
 bronzong = PokemonEntry("Bronzong", 67, 89, 116, 79, 116, 33, ["Trick Room", "Gyro Ball", "Earthquake", "Protect", "Safeguard", "Ally Switch", "Iron Defense", "Body Press"], "Steel", "Psychic"),
 
@@ -269,6 +271,8 @@ class Battle:
         self.player_2_seen_pokemon = [p.pokemon for p in self.player1.selected_pokemon]
         self.player_1_seen_moves = {p: [] for p in self.player_1_seen_pokemon}
         self.player_2_seen_moves = {p: [] for p in self.player_2_seen_pokemon}
+        self.trick_room = False
+        self.trick_room_turns = 0
 
         self.log = [(0, "p1:switch", None, self.player1.selected_pokemon[0]), (0, "p1:switch", None, self.player2.selected_pokemon[0]), (0, "p2:switch", None, self.player1.selected_pokemon[1]), (0, "p2:switch", None, self.player2.selected_pokemon[1])]
         for p in self.player1.selected_pokemon:
@@ -276,7 +280,6 @@ class Battle:
         for p in self.player2.selected_pokemon:
             p.player = "p2"
         
-
     def run(self):
         #start_time = time.time()
         self.trick_room = False
@@ -284,10 +287,18 @@ class Battle:
         #log_printed = False
         while self.winner is None:
             self.turn += 1
-            p1_action_1 = self.player1.choose_action(self.log, self._get_legal_actions(self.player1, 0))
-            p1_action_2 = self.player1.choose_action(self.log, self._get_legal_actions(self.player1, 1))
-            p2_action_1 = self.player2.choose_action(self.log, self._get_legal_actions(self.player2, 0))
-            p2_action_2 = self.player2.choose_action(self.log, self._get_legal_actions(self.player2, 1))
+            p1_action_1 = self.player1.choose_action(self.p1_battlefield_slots[0], self._get_legal_actions(self.player1, 0))
+            if type(p1_action_1) == int:
+                p1_action_1 = self._get_executable_action_from_index(p1_action_1, self.p1_battlefield_slots[0])
+            p1_action_2 = self.player1.choose_action(self.p1_battlefield_slots[1], self._get_legal_actions(self.player1, 1))
+            if type(p1_action_2) == int:
+                p1_action_2 = self._get_executable_action_from_index(p1_action_2, self.p1_battlefield_slots[1])
+            p2_action_1 = self.player2.choose_action(self.p2_battlefield_slots[0], self._get_legal_actions(self.player2, 0))
+            if type(p2_action_1) == int:
+                p2_action_1 = self._get_executable_action_from_index(p2_action_1, self.p2_battlefield_slots[0])
+            p2_action_2 = self.player2.choose_action(self.p2_battlefield_slots[1], self._get_legal_actions(self.player2, 1))
+            if type(p2_action_2) == int:
+                p2_action_2 = self._get_executable_action_from_index(p2_action_2, self.p2_battlefield_slots[1])
                 
             execute_order = self._order_actions(p1_action_1, p1_action_2, p2_action_1, p2_action_2)
             self._execute_actions(execute_order)
@@ -326,6 +337,518 @@ class Battle:
         self.p1_battlefield_slots = [self.player1.selected_pokemon[0], self.player1.selected_pokemon[1]]
         self.p2_battlefield_slots = [self.player2.selected_pokemon[0], self.player2.selected_pokemon[1]]
 
+    def get_value_and_terminated(self, active_pokemon, actions):
+        if actions == None:
+            return 0, False
+        new_active_pokemon = active_pokemon.copy()
+        active_player = active_pokemon.trainer
+        battle_simulation = self.copy()
+        team = battle_simulation._get_battlefield_slots(new_active_pokemon.trainer)
+        team_pokemon = [p for p in team if p.name != new_active_pokemon.name][0].copy() if None not in team else None # CHANGED
+        opposing_team = battle_simulation._get_battlefield_slots(battle_simulation._get_opposing_player(new_active_pokemon.trainer))
+        opposing_pokemon_1 = opposing_team[0].copy() if opposing_team[0] != None else None
+        opposing_pokemon_2 = opposing_team[1].copy() if opposing_team[1] != None else None
+        new_actions = []
+        for i, action in enumerate(actions):
+            if type(action) == int:
+                if i == 0:
+                    active_mon = new_active_pokemon
+                elif i == 1:
+                    active_mon = team_pokemon
+                elif i == 2:
+                    active_mon = opposing_pokemon_1
+                elif i == 3:
+                    active_mon = opposing_pokemon_2
+                action = battle_simulation._get_executable_action_from_index(action, active_mon)
+            new_actions.append(action)
+        actions = (new_actions[0], new_actions[1], new_actions[2], new_actions[3])
+        actions = battle_simulation._order_actions(actions[0], actions[1], actions[2], actions[3])
+        battle_simulation._execute_actions(actions)
+        battle_simulation._end_of_round_effects()
+        if battle_simulation.winner == None:
+            return 0, False
+        elif battle_simulation.winner == "draw":
+            return 0, True
+        elif battle_simulation.winner == self.player1 and active_player == self.player1:
+            return 1, True
+        elif battle_simulation.winner == self.player2 and active_player == self.player2:
+            return 1, True
+        elif battle_simulation.winner == self.player1 and active_player == self.player2:
+            return -1, True
+        elif battle_simulation.winner == self.player2 and active_player == self.player1:
+            return -1, True
+
+    def get_legal_action_space(self, active_pokemon, action_type=None, team_active_pokemon=None, opposing_team_slots=None):
+        action_space = np.zeros(ACTION_DIM)
+        
+        if team_active_pokemon == True:
+            active_team = self._get_battlefield_slots(active_pokemon.trainer)
+            active_pokemon = active_team[0] if active_team[0] != active_pokemon else active_team[1]
+        if opposing_team_slots == 0:
+            opposing_player = self._get_opposing_player(active_pokemon.trainer)
+            opposing_team = self._get_battlefield_slots(opposing_player)
+            active_pokemon = opposing_team[0] if opposing_team[0] != None else None
+        elif opposing_team_slots == 1:
+            opposing_player = self._get_opposing_player(active_pokemon.trainer)
+            opposing_team = self._get_battlefield_slots(opposing_player)
+            active_pokemon = opposing_team[1] if opposing_team[1] != None else None
+
+        if active_pokemon == None:
+            action_space[-1] = 1
+            return action_space
+        elif active_pokemon.hp <= 0 and action_type != "switch":
+            action_space[-1] = 1
+            return action_space
+        
+        trainer = active_pokemon.trainer
+        active_team = self._get_battlefield_slots(trainer)
+        team_pokemon = [p for p in active_team if p.name != active_pokemon.name][0] if None not in active_team else None
+        opposing_player = self._get_opposing_player(trainer)
+        opposing_team = self._get_battlefield_slots(opposing_player)
+        
+        # first 72 indices are for moves and pokemon selection, irrelevant here
+        a=0
+        for i, p in enumerate(trainer.selected_pokemon):
+            if p.hp > 0:
+                if active_team[0] == None and active_team[1] == None:
+                    action_space[72+a] = 1
+                elif active_team[0] == None and active_team[1] != None:
+                    if p.name != active_team[1].name:
+                        action_space[72+a] = 1
+                elif active_team[0] != None and active_team[1] == None:
+                    if p.name != active_team[0].name:
+                        action_space[72+a] = 1
+                elif p.name != active_team[0].name and p.name != active_team[1].name:
+                    action_space[72+a] = 1
+                a+=1
+
+        """
+        action_space[72+a] = 1
+                a+=1
+        for i, p in enumerate(trainer.selected_pokemon):
+            if p.hp > 0:
+                if active_team[0] == None and active_team[1] == None:
+                    legal_switches.append(p)
+                elif active_team[0] == None and active_team[1] != None:
+                    if p != active_team[1]:
+                        legal_switches.append(p)
+                elif active_team[0] != None and active_team[1] == None:
+                    if p != active_team[0]:
+                        legal_switches.append(p)
+                elif p != active_team[0] and p != active_team[1]:
+                    legal_switches.append(p)
+        """
+
+        if action_type == "switch":
+            return action_space
+        # index 72 and 73 are for switch actions (the 73rd and 74th actions)
+        for i, m in enumerate(active_pokemon.moves):
+            i*=4
+            if m.pp == 0:
+                continue
+            if m.legal_targets == "target":
+                if team_pokemon != None:
+                    action_space[74+i] = 1
+                if opposing_team[0] != None:
+                    action_space[74+i+1] = 1
+                if opposing_team[1] != None:
+                    action_space[74+i+2] = 1
+            elif m.legal_targets == "self" or m.legal_targets == "all_other" or m.legal_targets == "all_adjacent_allies":
+                if m.legal_targets == "all_adjacent_allies" and team_pokemon == None:
+                    continue
+                action_space[74+i+3] = 1
+
+        # if no other moves are available last index is true for struggle
+        if np.sum(action_space) == 0:
+            action_space[-2] = 1
+        
+        return action_space
+
+    def get_battle_state(self, active_pokemon):
+        state = np.zeros(STATE_DIM)
+        current_node = 0
+        active_team = self._get_battlefield_slots(active_pokemon.trainer)
+        opposing_player = self._get_opposing_player(active_pokemon.trainer)
+        opposing_team = self._get_battlefield_slots(opposing_player)
+        
+        max_stats = self._get_max_stats()
+        
+        # first 6*12*2 nodes are for pokemon on both teams
+        team_pokemon = [active_pokemon]
+        team_pokemon += [p for p in active_pokemon.trainer.team if p.name != active_pokemon.name]
+        all_pokemon = team_pokemon + [p for p in opposing_player.team]
+        for i, p in enumerate(all_pokemon):
+            for pkmn in POKEMON_ENTRIES:
+                state[current_node] = 1 if p.pokemon == pkmn[0] else 0
+                current_node += 1
+
+        # next 61*6 nodes are for moves that active player has on team
+        for i, p in enumerate(team_pokemon):
+            for move in MOVES:
+                state[current_node] = 1 if move in p.moves else 0
+                current_node += 1
+
+        # next 6 nodes are for which pokemon have been selected for this battle
+        for i, p in enumerate(team_pokemon):
+            if p in active_pokemon.trainer.selected_pokemon:
+                state[current_node] = 1
+            current_node += 1
+
+        # next 6 nodes are for which pokemon are known to be selected by opposing player
+        for i, p in enumerate(opposing_player.team):
+            if p.trainer == self.player2:
+                if p in self.player_1_seen_pokemon:
+                    state[current_node] = 1
+            elif p.trainer == self.player1:
+                if p in self.player_2_seen_pokemon:
+                    state[current_node] = 1
+            current_node += 1
+
+        # next 61*4 nodes are for known move of opposing selected pokemon
+        for i, p in enumerate(opposing_player.selected_pokemon):
+            if p.trainer == self.player2:
+                for move in MOVES:
+                    if move in self.player_1_seen_moves[p]:
+                        state[current_node] = 1
+                    current_node += 1
+            elif p.trainer == self.player1:
+                for move in MOVES:
+                    if move in self.player_2_seen_moves[p]:
+                        state[current_node] = 1
+                    current_node += 1
+
+        # next 1 node for trick room
+        state[current_node] = 1 if self.trick_room else 0
+        current_node += 1
+
+        on_battlefield = [active_pokemon]
+        on_battlefield += [p for p in active_team if p.name != active_pokemon.name] if None not in active_team else [None]
+        on_battlefield += [p for p in opposing_team]
+
+        # next 4*4 nodes are for non-unique status effects on active pokemon (switched out mons lose status)
+        for i, p in enumerate(on_battlefield):
+            if p == None:
+                current_node += 4
+                continue
+            state[current_node] = p.protect_count/5
+            current_node += 1
+            state[current_node] = 1 if p.status == "taunt" else 0
+            current_node += 1
+            state[current_node] = 1 if p.status == "yawn" else 0
+            current_node += 1
+            state[current_node] = 1 if p.first_action_taken else 0
+            current_node += 1
+        
+        all_selected_pokemon = [active_pokemon]
+        all_selected_pokemon += [p for p in active_pokemon.trainer.selected_pokemon if p.name != active_pokemon.name]
+        all_selected_pokemon += [p for p in opposing_player.selected_pokemon]
+        # next 6*8 nodes are for unique status effects on all selected pokemon
+        for i, p in enumerate(all_selected_pokemon):
+            if p.hp <= 0:
+                current_node += 6
+                continue
+            state[current_node] = 1 if p.unique_status == "sleep" else 0
+            current_node += 1
+            state[current_node] = 1 if p.unique_status == "paralyze" else 0
+            current_node += 1
+            state[current_node] = 1 if p.unique_status == "freeze" else 0
+            current_node += 1
+            state[current_node] = p.turns_asleep/3
+            current_node += 1
+            state[current_node] = 1 if p.unique_status == "burn" else 0
+            current_node += 1
+            state[current_node] = 1 if p.unique_status == "poison" else 0
+            current_node += 1
+
+        # next 6*8 nodes are for current stats of all selected pokemon
+        for i, p in enumerate(all_selected_pokemon):
+            if p.trainer == self.player1 and active_pokemon.trainer == self.player1:
+                if p not in self.player_1_seen_pokemon:
+                    current_node += 6
+                    continue
+            elif p.trainer == self.player2 and active_pokemon.trainer == self.player2:
+                if p not in self.player_2_seen_pokemon:
+                    current_node += 6
+                    continue
+                
+            if p.hp <= 0:
+                current_node += 6
+                continue
+            state[current_node] = p.hp/max_stats["hp"]
+            current_node += 1
+            state[current_node] = p.effective_stats["attack"]/max_stats["attack"]
+            current_node += 1
+            state[current_node] = p.effective_stats["defense"]/max_stats["defense"]
+            current_node += 1
+            state[current_node] = p.effective_stats["special_attack"]/max_stats["special_attack"]
+            current_node += 1
+            state[current_node] = p.effective_stats["special_defense"]/max_stats["special_defense"]
+            current_node += 1
+            state[current_node] = p.effective_stats["speed"]/max_stats["speed"]
+            current_node += 1
+
+        return state
+
+    def get_next_battle_state(self, active_pokemon, actions):
+        new_active_pokemon = active_pokemon.copy()
+        battle_simulation = self.copy()
+        battle_simulation.is_simulation = True
+        
+        team = battle_simulation._get_battlefield_slots(new_active_pokemon.trainer)
+        team_pokemon = [p for p in team if p.name != new_active_pokemon.name][0].copy() if None not in team else None
+        opposing_team = battle_simulation._get_battlefield_slots(battle_simulation._get_opposing_player(new_active_pokemon.trainer))
+        opposing_pokemon_1 = opposing_team[0].copy() if opposing_team[0] != None else None
+        opposing_pokemon_2 = opposing_team[1].copy() if opposing_team[1] != None else None
+        new_actions = []
+        for i, action in enumerate(actions):
+            if type(action) == int:
+                if i == 0:
+                    active_mon = new_active_pokemon
+                elif i == 1:
+                    active_mon = team_pokemon
+                elif i == 2:
+                    active_mon = opposing_pokemon_1
+                elif i == 3:
+                    active_mon = opposing_pokemon_2
+                action = battle_simulation._get_executable_action_from_index(action, active_mon)
+            new_actions.append(action)
+        actions = (new_actions[0], new_actions[1], new_actions[2], new_actions[3])
+        if actions[0] != None:
+            if actions[0][0] == "move" and actions[0][2].pp == 0:
+                print(actions)
+        elif actions[1] != None:
+            if actions[1][0] == "move" and actions[1][2].pp == 0:
+                print(actions)
+        elif actions[2] != None:
+            if actions[2][0] == "move" and actions[2][2].pp == 0:
+                print(actions)
+        elif actions[3] != None:
+            if actions[3][0] == "move" and actions[3][2].pp == 0:
+                print(actions)
+        for i, a1 in enumerate(actions):
+            for j, a2 in enumerate(actions):
+                if i != j and a1 != None and a2 != None:
+                    if a1[0] == "move" and a2[0] == "move" and a1[1] == a2[1]:
+                        print(actions)
+        actions = battle_simulation._order_actions(actions[0], actions[1], actions[2], actions[3])
+        battle_simulation._execute_actions(actions)
+        battle_simulation._end_of_round_effects()
+        next_state = battle_simulation.get_battle_state(new_active_pokemon)
+        return next_state, battle_simulation
+
+    def get_team_state_from_active_pokemon(self, active_pokemon):
+        if active_pokemon == None:
+            state = np.zeros(STATE_DIM)
+            state[-1] = 1
+            return state
+        team = self._get_battlefield_slots(active_pokemon.trainer)
+        team_pokemon = [p for p in team if p.name != active_pokemon.name][0] if None not in team else None
+        if team_pokemon == None:
+            state = np.zeros(STATE_DIM)
+            state[-1] = 1
+            return state
+        state = self.get_battle_state(team_pokemon)
+        return state
+ 
+    def get_opponent_state_from_active_pokemon(self, active_pokemon, opponent_slot):
+        state = np.zeros(STATE_DIM)
+        opposing_battlefield_slots = self._get_battlefield_slots(self._get_opposing_player(active_pokemon.trainer))
+        if opposing_battlefield_slots[opponent_slot] == None:
+            state[-1] = 1
+            return state
+        active_opponent_pokemon = opposing_battlefield_slots[opponent_slot]
+
+        if active_pokemon.trainer == self.player1:
+            seen_pokemon = self.player_1_seen_pokemon
+            seen_moves = self.player_1_seen_moves
+            opponent_seen_pokemon = self.player_2_seen_pokemon
+            opponent_seen_moves = self.player_2_seen_moves
+        else:
+            seen_pokemon = self.player_2_seen_pokemon
+            seen_moves = self.player_2_seen_moves
+            opponent_seen_pokemon = self.player_1_seen_pokemon
+            opponent_seen_moves = self.player_1_seen_moves
+
+        current_node = 0
+        active_team = self._get_battlefield_slots(active_opponent_pokemon.trainer)
+        opposing_player = self._get_opposing_player(active_opponent_pokemon.trainer)
+        opposing_team = self._get_battlefield_slots(opposing_player)
+        
+        max_stats = self._get_max_stats()
+        
+        # first 6*12*2 nodes are for pokemon on both teams
+        team_pokemon = [active_opponent_pokemon]
+        team_pokemon += [p for p in active_opponent_pokemon.trainer.team if p.name != active_opponent_pokemon.name]
+        all_pokemon = team_pokemon + [p for p in opposing_player.team]
+        for i, p in enumerate(all_pokemon):
+            for pkmn in POKEMON_ENTRIES:
+                state[current_node] = 1 if p.pokemon == pkmn[0] else 0
+                current_node += 1
+
+        # next 60*6 nodes are for moves that active player has on team
+        for i, p in enumerate(team_pokemon):
+            for move in MOVES:
+                if p not in seen_moves.keys():
+                    current_node += 1
+                    continue
+                if move not in seen_moves[p]:
+                    current_node += 1
+                    continue
+                state[current_node] = 1 if move in p.moves else 0
+                current_node += 1
+
+        # next 6 nodes are for which pokemon have been selected for this battle
+        for i, p in enumerate(team_pokemon):
+            if p in active_opponent_pokemon.trainer.selected_pokemon:
+                if p not in seen_pokemon:
+                    current_node += 1
+                    continue
+                state[current_node] = 1
+            current_node += 1
+
+        # next 6 nodes are for which pokemon are known to be selected by opposing player
+        for i, p in enumerate(opposing_player.team):
+            if p in opponent_seen_pokemon:
+                state[current_node] = 1
+            current_node += 1
+
+        # next 60*4 nodes are for known move of opposing selected pokemon
+        for i, p in enumerate(opposing_player.selected_pokemon):
+            for move in MOVES:
+                if p in opponent_seen_moves.keys():
+                    if move in opponent_seen_moves[p]:
+                        state[current_node] = 1
+                current_node += 1
+
+
+        # next 1 node for trick room
+        state[current_node] = 1 if self.trick_room else 0
+        current_node += 1
+
+        on_battlefield = [active_opponent_pokemon]
+        on_battlefield += [p for p in active_team if p.name != active_opponent_pokemon.name] if None not in active_team else [None]
+        on_battlefield += [p for p in opposing_team]
+
+        # next 4*4 nodes are for non-unique status effects on active pokemon (switched out mons lose status)
+        for i, p in enumerate(on_battlefield):
+            if p == None:
+                current_node += 4
+                continue
+            state[current_node] = p.protect_count/5
+            current_node += 1
+            state[current_node] = 1 if p.status == "taunt" else 0
+            current_node += 1
+            state[current_node] = 1 if p.status == "yawn" else 0
+            current_node += 1
+            state[current_node] = 1 if p.first_action_taken else 0
+            current_node += 1
+        
+        all_selected_pokemon = [active_opponent_pokemon]
+        all_selected_pokemon += [p for p in active_opponent_pokemon.trainer.selected_pokemon if p.name != active_opponent_pokemon.name]
+        all_selected_pokemon += [p for p in opposing_player.selected_pokemon]
+        # next 6*8 nodes are for unique status effects on all selected pokemon
+        for i, p in enumerate(all_selected_pokemon):
+            if p.hp <= 0:
+                current_node += 6
+                continue
+            state[current_node] = 1 if p.unique_status == "sleep" else 0
+            current_node += 1
+            state[current_node] = 1 if p.unique_status == "paralyze" else 0
+            current_node += 1
+            state[current_node] = 1 if p.unique_status == "freeze" else 0
+            current_node += 1
+            state[current_node] = p.turns_asleep/3
+            current_node += 1
+            state[current_node] = 1 if p.unique_status == "burn" else 0
+            current_node += 1
+            state[current_node] = 1 if p.unique_status == "poison" else 0
+            current_node += 1
+
+        # next 6*8 nodes are for current stats of all selected pokemon
+        for i, p in enumerate(all_selected_pokemon):        
+            if p not in opponent_seen_pokemon or p not in seen_pokemon:
+                current_node += 6
+                continue
+
+            if p.hp <= 0:
+                current_node += 6
+                continue
+            state[current_node] = p.hp/max_stats["hp"]
+            current_node += 1
+            state[current_node] = p.effective_stats["attack"]/max_stats["attack"]
+            current_node += 1
+            state[current_node] = p.effective_stats["defense"]/max_stats["defense"]
+            current_node += 1
+            state[current_node] = p.effective_stats["special_attack"]/max_stats["special_attack"]
+            current_node += 1
+            state[current_node] = p.effective_stats["special_defense"]/max_stats["special_defense"]
+            current_node += 1
+            state[current_node] = p.effective_stats["speed"]/max_stats["speed"]
+            current_node += 1
+
+        return state
+
+    def _get_executable_action_from_index(self, action_index, active_pokemon):
+        if active_pokemon == None:
+            return None
+        if action_index < 72:
+            return None
+        elif action_index == ACTION_DIM-1:
+            return None
+        elif action_index == ACTION_DIM-2:
+            struggle_target = random.choice(self._get_battlefield_slots(self._get_opposing_player(active_pokemon.trainer)))
+            if struggle_target == None:
+                struggle_target = [p for p in self._get_battlefield_slots(self._get_opposing_player(active_pokemon.trainer)) if p != None][0]
+            return ("move", active_pokemon, MOVES[-1], struggle_target)
+        
+            
+        trainer = active_pokemon.trainer
+        active_team = self._get_battlefield_slots(trainer)
+        legal_switches = []
+        for i, p in enumerate(trainer.selected_pokemon):
+            if p.hp > 0:
+                if active_team[0] == None and active_team[1] == None:
+                    legal_switches.append(p)
+                elif active_team[0] == None and active_team[1] != None:
+                    if p.name != active_team[1].name:
+                        legal_switches.append(p)
+                elif active_team[0] != None and active_team[1] == None:
+                    if p.name != active_team[0].name:
+                        legal_switches.append(p)
+                elif p.name != active_team[0].name and p.name != active_team[1].name:
+                    legal_switches.append(p)
+                
+        if action_index == 72:
+            return ("switch", active_pokemon, legal_switches[0])
+        elif action_index == 73:
+            if len(legal_switches) == 1:
+                return ("switch", active_pokemon, legal_switches[0])
+            elif len(legal_switches) == 2:
+                return ("switch", active_pokemon, legal_switches[1])
+            else:
+                raise ValueError("No legal switches")
+        action_index -= 74
+        move_index = action_index//4
+        target_index = action_index%4
+        move = active_pokemon.moves[move_index]
+        opposing_player = self._get_opposing_player(trainer)
+        team_pokemon = [p for p in active_team if p.name != active_pokemon.name][0] if None not in active_team else None
+        opposing_team = self._get_battlefield_slots(opposing_player)
+        if move.legal_targets == "target":
+            if target_index == 0:
+                target = team_pokemon # Potential problem if target is None?
+            elif target_index == 1:
+                target = opposing_team[0]
+            else:
+                target = opposing_team[1]
+        elif move.legal_targets == "self":
+            target = active_pokemon
+        elif move.legal_targets == "all_other":
+            target = (team_pokemon, opposing_team[0], opposing_team[1])
+        elif move.legal_targets == "all_adjacent_allies":
+            target = team_pokemon
+
+        return ("move", active_pokemon, move, target)
 
     def _get_legal_actions(self, player, pokemon_slot):
         actions = []
@@ -355,10 +878,12 @@ class Battle:
     
         if actions == []:
             # Struggle is a move
-            if opposing_battlefield_slots[pokemon_slot] != None:
+            if opposing_battlefield_slots[pokemon_slot] != None and opposing_battlefield_slots[-1-pokemon_slot] == None:
                 actions.append(("move", battlefield_slots[pokemon_slot], MOVES[-1], opposing_battlefield_slots[pokemon_slot]))
-            if opposing_battlefield_slots[-1-pokemon_slot] != None:
+            elif opposing_battlefield_slots[-1-pokemon_slot] != None and opposing_battlefield_slots[pokemon_slot] == None:
                 actions.append(("move", battlefield_slots[pokemon_slot], MOVES[-1], opposing_battlefield_slots[-1-pokemon_slot]))
+            else:
+                actions.append(("move", battlefield_slots[pokemon_slot], MOVES[-1], opposing_battlefield_slots[random.choice([pokemon_slot, -1-pokemon_slot])]))
 
         # Get switch actions
         for p in player.selected_pokemon:
@@ -366,166 +891,6 @@ class Battle:
                 actions.append(("switch", battlefield_slots[pokemon_slot], p))
 
         return actions
-
-    def get_legal_action_space(self, active_pokemon, action_type=None):
-        action_space = np.zeros(ACTION_DIM)
-        if active_pokemon == None:
-            action_space[-1] = 1
-            return action_space
-        elif active_pokemon.hp <= 0:
-            action_space[-1] = 1
-            return action_space
-        
-        trainer = active_pokemon.trainer
-        active_team = self._get_battlefield_slots(trainer)
-        team_pokemon = [p for p in active_team if p != active_pokemon]
-        opposing_player = self._get_opposing_player(trainer)
-        opposing_team = self._get_battlefield_slots(opposing_player)
-        
-        # first 72 indices are for moves and pokemon selection, irrelevant here
-        for i, p in enumerate(trainer.selected_pokemon):
-            if p.hp > 0 and p != active_team[0] and p != active_team[1]:
-                action_space[72+i] = 1
-
-        if action_type == "switch":
-            return action_space
-        # index 73 and 74 are for switch actions
-        for i, m in enumerate(active_pokemon.moves):
-            if m.pp == 0:
-                continue
-            i *= 4
-            if m.legal_targets == "target":
-                if team_pokemon[0] != None:
-                    action_space[74+i] = 1
-                if opposing_team[0] != None:
-                    action_space[74+i+1] = 1
-                if team_pokemon[1] != None:
-                    action_space[74+i+2] = 1
-            elif m.legal_targets == "self" or m.legal_targets == "all_other" or m.legal_targets == "all_adjacent_allies":
-                if m.legal_targets == "all_adjacent_allies" and team_pokemon[0] == None:
-                    continue
-                action_space[74+i+3] = 1
-
-        # if no other moves are available last index is true for struggle
-        if np.sum(action_space) == 0:
-            action_space[-2] = 1
-        
-        return action_space
-
-    def get_battle_state(self, active_pokemon):
-        state = np.zeros(STATE_DIM)
-        current_node = 0
-        active_team = self._get_battlefield_slots(active_pokemon.trainer)
-        opposing_player = self._get_opposing_player(active_pokemon.trainer)
-        opposing_team = self._get_battlefield_slots(opposing_player)
-        
-        max_stats = self._get_max_stats()
-        
-        # first 6*12*2 nodes are for pokemon on both teams
-        team_pokemon = [active_pokemon]
-        team_pokemon += [p for p in active_pokemon.trainer.team if p != active_pokemon]
-        all_pokemon = team_pokemon + [p for p in opposing_player.team]
-        for i, p in enumerate(all_pokemon):
-            for pkmn in POKEMON_ENTRIES:
-                state[current_node] = 1 if p.pokemon == pkmn else 0
-                current_node += 1
-
-        # next 60*6 nodes are for moves that active player has on team
-        for i, p in enumerate(team_pokemon):
-            for move in MOVES:
-                state[current_node] = 1 if move in p.moves else 0
-                current_node += 1
-
-            # next 6 nodes are for which pokemon have been selected for this battle
-            if p in active_pokemon.trainer.selected_pokemon:
-                state[current_node] = 1
-            current_node += 1
-
-        # next 6 nodes are for which pokemon are known to be selected by opposing player
-        for i, p in enumerate(opposing_player.team):
-            if p.trainer == self.player2:
-                if p in self.player_1_seen_pokemon:
-                    state[current_node] = 1
-            elif p.trainer == self.player1:
-                if p in self.player_2_seen_pokemon:
-                    state[current_node] = 1
-            current_node += 1
-
-        # next 60*4 nodes are for known move of opposing selected pokemon
-        for i, p in enumerate(opposing_player.selected_pokemon):
-            if p.trainer == self.player2:
-                for move in MOVES:
-                    if move in self.player_1_seen_moves[p]:
-                        state[current_node] = 1
-                    current_node += 1
-            elif p.trainer == self.player1:
-                for move in MOVES:
-                    if move in self.player_2_seen_moves[p]:
-                        state[current_node] = 1
-                    current_node += 1
-
-        # next 1 node for trick room
-        state[current_node] = 1 if self.trick_room else 0
-        current_node += 1
-
-        on_battlefield = [active_pokemon]
-        on_battlefield += [p for p in active_team if p != active_pokemon]
-        on_battlefield += [p for p in opposing_team]
-
-        # next 4*4 nodes are for non-unique status effects on active pokemon (switched out mons lose status)
-        for i, p in enumerate(on_battlefield):
-            if p == None:
-                current_node += 4
-                continue
-            state[current_node] = p.protect_count/5
-            current_node += 1
-            state[current_node] = 1 if p.status == "taunt" else 0
-            current_node += 1
-            state[current_node] = 1 if p.status == "yawn" else 0
-            current_node += 1
-            state[current_node] = 1 if p.first_action_taken else 0
-            current_node += 1
-        
-        all_selected_pokemon = [active_pokemon]
-        all_selected_pokemon += [p for p in active_pokemon.trainer.selected_pokemon if p != active_pokemon]
-        all_selected_pokemon += [p for p in opposing_player.selected_pokemon]
-        # next 6*8 nodes are for unique status effects on all selected pokemon
-        for i, p in enumerate(all_selected_pokemon):
-            if p.hp <= 0:
-                current_node += 6
-                continue
-            state[current_node] = 1 if p.unique_status == "sleep" else 0
-            current_node += 1
-            state[current_node] = 1 if p.unique_status == "paralyze" else 0
-            current_node += 1
-            state[current_node] = 1 if p.unique_status == "freeze" else 0
-            current_node += 1
-            state[current_node] = p.turns_asleep/3
-            current_node += 1
-            state[current_node] = 1 if p.unique_status == "burn" else 0
-            current_node += 1
-            state[current_node] = 1 if p.unique_status == "poison" else 0
-            current_node += 1
-
-        # next 6*8 nodes are for current stats of all selected pokemon
-        for i, p in enumerate(all_selected_pokemon):
-            if p.hp <= 0:
-                current_node += 6
-                continue
-            state[current_node] = p.hp/max_stats["hp"]
-            current_node += 1
-            state[current_node] = p.effective_stats["attack"]/max_stats["attack"]
-            current_node += 1
-            state[current_node] = p.effective_stats["defense"]/max_stats["defense"]
-            current_node += 1
-            state[current_node] = p.effective_stats["special_attack"]/max_stats["special_attack"]
-            current_node += 1
-            state[current_node] = p.effective_stats["special_defense"]/max_stats["special_defense"]
-            current_node += 1
-            state[current_node] = p.effective_stats["speed"]/max_stats["speed"]
-            current_node += 1
-
-        return state
             
     def _get_max_stats(self):
         max_stats = {
@@ -536,25 +901,23 @@ class Battle:
             "special_defense": 0,
             "speed": 0
         }
+
         for p in POKEMON_ENTRIES:
-            for s in p.stats:
-                if p.stats[s] > max_stats[s]:
-                    max_stats[s] = p[0].stats[s]
+            pkmn = p[0]
+            if pkmn.hp > max_stats["hp"]:
+                max_stats["hp"] = pkmn.hp
+            if pkmn.attack > max_stats["attack"]:
+                max_stats["attack"] = pkmn.attack
+            if pkmn.defense > max_stats["defense"]:
+                max_stats["defense"] = pkmn.defense
+            if pkmn.special_attack > max_stats["special_attack"]:
+                max_stats["special_attack"] = pkmn.special_attack
+            if pkmn.special_defense > max_stats["special_defense"]:
+                max_stats["special_defense"] = pkmn.special_defense
+            if pkmn.speed > max_stats["speed"]:
+                max_stats["speed"] = pkmn.speed
 
-    def get_next_battle_state(self, active_pokemon, actions):
-        battle_simulation = self.copy()
-        battle_simulation.is_simulation = True
-        battle_simulation._order_actions(actions[0], actions[1], actions[2], actions[3])
-        battle_simulation._execute_actions(actions)
-        battle_simulation._end_of_round_effects()
-        next_state = battle_simulation.get_battle_state(active_pokemon)
-        return next_state
-
-    def get_team_state_from_state(self, state):
-        return np.zeros(STATE_DIM)
-    
-    def get_opponent_state_from_state(self, state, opponent):
-        return np.zeros(STATE_DIM)
+        return max_stats
 
     def _order_actions(self, p1_action_1, p1_action_2, p2_action_1, p2_action_2):
         actions = [p1_action_1, p1_action_2, p2_action_1, p2_action_2]
@@ -776,7 +1139,16 @@ class Battle:
                             target.effective_stats["special_attack"] = target.stats["special_attack"] * 2/(2-e[1])
                             target.effective_stats["special_attack"] = int(max(target.effective_stats["special_attack"], 0.25*target.special_attack))
                     elif e[0] == "switch":
-                        self._execute_switch(pokemon, target)
+                        if pokemon == self._get_battlefield_slots(pokemon.trainer)[0]:
+                            active_slot = 0
+                        else:
+                            active_slot = 1
+                        actions = self._get_legal_actions(pokemon.trainer, active_slot)
+                        switch_actions = [a for a in actions if a[0] == "switch"]
+                        switch = pokemon.trainer.choose_action(pokemon, switch_actions)
+                        if type(switch) == int:
+                            switch = self._get_executable_action_from_index(switch, pokemon)
+                        self._execute_switch(pokemon, switch[2])
         pokemon.first_action_taken = True
         self._check_win()  
 
@@ -894,7 +1266,10 @@ class Battle:
                     
                 actions = self._get_legal_actions(attacker.trainer, active_slot)
                 switch_actions = [a for a in actions if a[0] == "switch"]
-                switch = attacker.trainer.choose_action(self.log, switch_actions)
+                switch = attacker.trainer.choose_action(attacker, switch_actions)
+                if type(switch) == int:
+                    switch = self._get_executable_action_from_index(switch, attacker)
+                
                 if switch != None:
                     self._execute_switch(attacker, switch[2])
 
@@ -942,25 +1317,6 @@ class Battle:
         new_battle.log = self.log.copy()
         return new_battle
 
-    def get_value_and_terminated(self, active_pokemon, actions):
-        active_player = active_pokemon.trainer
-        battle_simulation = self.copy()
-        battle_simulation._order_actions(actions[0], actions[1], actions[2], actions[3])
-        battle_simulation._execute_actions(actions)
-        battle_simulation._end_of_round_effects()
-        if battle_simulation.winner == None:
-            return 0, False
-        elif battle_simulation.winner == "draw":
-            return 0, True
-        elif battle_simulation.winner == self.player1 and active_player == self.player1:
-            return 1, True
-        elif battle_simulation.winner == self.player2 and active_player == self.player2:
-            return 1, True
-        elif battle_simulation.winner == self.player1 and active_player == self.player2:
-            return -1, True
-        elif battle_simulation.winner == self.player2 and active_player == self.player1:
-            return -1, True
-
     def _end_of_round_effects(self):
         for battlefield_side in [self.p1_battlefield_slots, self.p2_battlefield_slots]:
             for p in battlefield_side:
@@ -976,6 +1332,8 @@ class Battle:
                     p.status.remove("yawn")
                     p.unique_status = "sleep"
                     self.log.append((self.turn, f"{p.player}:pkmn_fell_asleep", p))
+                if "helping_hand" in p.status:
+                    p.status.remove("helping_hand")
 
         self._check_win()
         if self.is_simulation:
@@ -983,18 +1341,21 @@ class Battle:
         for battlefield_side in [self.p1_battlefield_slots, self.p2_battlefield_slots]:
             for active_slot, p in enumerate(battlefield_side):
                 if p == None:
-                    trainer = self.player1 if battlefield_side == self.p1_battlefield_slots else self.player2
-                    actions = self._get_legal_actions(trainer, active_slot)
-                    switch_actions = [a for a in actions if a[0] == "switch"]
-                    switch = trainer.choose_action(self.log, switch_actions)
-                    if switch != None:
-                        self._execute_switch(p, switch[2])
-                    else:
-                        continue
+                    continue
+                #    trainer = 
+                #    actions = self._get_legal_actions(trainer, active_slot)
+                #    switch_actions = [a for a in actions if a[0] == "switch"]
+                #    switch = trainer.choose_action(None, switch_actions)
+                #    if switch != None:
+                #        self._execute_switch(p, switch[2])
+                #    else:
+                #        continue
                 if p.hp <= 0:
                     actions = self._get_legal_actions(p.trainer, active_slot)
                     switch_actions = [a for a in actions if a[0] == "switch"]
-                    switch = p.trainer.choose_action(self.log, switch_actions)
+                    switch = p.trainer.choose_action(p, switch_actions)
+                    if type(switch) == int:
+                        switch = self._get_executable_action_from_index(switch, p)
                     if switch != None:
                         self._execute_switch(p, switch[2])                      
                     else:
@@ -1007,5 +1368,3 @@ class Battle:
                 self.trick_room = False
 
         
-
-
