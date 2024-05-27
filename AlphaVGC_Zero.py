@@ -5,8 +5,6 @@ from environment import PokemonEnvironment, Pokemon, POKEMON_ENTRIES, MOVES
 import numpy as np
 import math
 import random
-from random_agent import RandomPlayer
-import time
 from tqdm import trange
 
 class Model(nn.Module):
@@ -132,21 +130,21 @@ class MonteCarloTreeSearch:
 
             if not is_terminal:
                 self_policy, value = self.model(
-                    torch.tensor(node.state, dtype=torch.float32).unsqueeze(0)
+                    torch.tensor(node.state, dtype=torch.float32).unsqueeze(0).to(device)
                 )
                 team_pokemon_policy, _ = self.model(
-                    torch.tensor(self.game.battle.get_team_state_from_active_pokemon(active_pokemon), dtype=torch.float32).unsqueeze(0)
+                    torch.tensor(self.game.battle.get_team_state_from_active_pokemon(active_pokemon), dtype=torch.float32).unsqueeze(0).to(device)
                 )
                 opponent_1_policy, _ = self.model(
-                    torch.tensor(self.game.battle.get_opponent_state_from_active_pokemon(active_pokemon, 0), dtype=torch.float32).unsqueeze(0)
+                    torch.tensor(self.game.battle.get_opponent_state_from_active_pokemon(active_pokemon, 0), dtype=torch.float32).unsqueeze(0).to(device)
                 )
                 opponent_2_policy, _ = self.model(
-                    torch.tensor(self.game.battle.get_opponent_state_from_active_pokemon(active_pokemon, 1), dtype=torch.float32).unsqueeze(0)
+                    torch.tensor(self.game.battle.get_opponent_state_from_active_pokemon(active_pokemon, 1), dtype=torch.float32).unsqueeze(0).to(device)
                 )
-                self_policy = torch.softmax(self_policy, dim=-1).numpy().squeeze()#might be incorrect
-                team_pokemon_policy = torch.softmax(team_pokemon_policy, dim=-1).numpy().squeeze()
-                opponent_1_policy = torch.softmax(opponent_1_policy, dim=-1).numpy().squeeze()
-                opponent_2_policy = torch.softmax(opponent_2_policy, dim=-1).numpy().squeeze()
+                self_policy = torch.softmax(self_policy, dim=-1).cpu().numpy().squeeze()#might be incorrect
+                team_pokemon_policy = torch.softmax(team_pokemon_policy, dim=-1).cpu().numpy().squeeze()
+                opponent_1_policy = torch.softmax(opponent_1_policy, dim=-1).cpu().numpy().squeeze()
+                opponent_2_policy = torch.softmax(opponent_2_policy, dim=-1).cpu().numpy().squeeze()
 
                 # Get valid actions then multiply policies by valid action corresponding to that mon
                 self_valid_actions = self.game.battle.get_legal_action_space(active_pokemon)
@@ -231,9 +229,9 @@ class AlphaVGCZero:
             legal_switches = legal_actions*switch_position
                 
             policy, _ = self.model(
-                    torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+                    torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
                 )
-            policy = torch.softmax(policy, dim=-1).detach().numpy().squeeze()
+            policy = torch.softmax(policy, dim=-1).detach().cpu().numpy().squeeze()
             policy = policy * legal_switches
             if np.sum(policy) == 0:
                 return None
@@ -254,7 +252,7 @@ class AlphaVGCZero:
 
     def self_play(self):
         battles_per_self_play = self.args["num_battles_per_self_play"]
-        p1 = self
+        p1 = self.copy()
         p2 = self.copy()
         p1.memory = []
         p2.memory = []
@@ -275,8 +273,11 @@ class AlphaVGCZero:
         for batchIDx in range(0, len(memory), self.args["batch_size"]):
             batch = memory[batchIDx:batchIDx+self.args["batch_size"]]
             states = torch.tensor([s for s, _, _ in batch], dtype=torch.float32)
+            states = states.to(device)
             policies = torch.tensor([p for _, p, _ in batch], dtype=torch.float32)
+            policies = policies.to(device)
             outcomes = torch.tensor([o for _, _, o in batch], dtype=torch.float32)
+            outcomes = outcomes.to(device)
             self.optimizer.zero_grad()
             policy_preds, value_preds = self.model(states)
             policy_loss = -torch.sum(policies * torch.log(policy_preds)) # Maybe do cross entropy loss here
@@ -285,7 +286,7 @@ class AlphaVGCZero:
             loss.backward()
             self.optimizer.step()
 
-    def learn(self, save_path=None):
+    def learn(self):
         for iteration in range(self.args["num_iterations"]):
             memory = []
             self.model.eval()
@@ -294,8 +295,8 @@ class AlphaVGCZero:
             self.model.train()
             for epoch in trange(self.args["num_epochs"]):
                 self.train(memory)
-            torch.save(self.model.state_dict(), f"{save_path}/model_{iteration}.pt")
-            torch.save(self.optimizer.state_dict(), f"{save_path}/optimizer_{iteration}.pt")
+            torch.save(self.model.state_dict(), f"model_{iteration}.pt")
+            torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}.pt")
 
     def load_weights(self, filename):
         self.model.load_state_dict(torch.load(filename))
@@ -305,16 +306,17 @@ class AlphaVGCZero:
 
 env = PokemonEnvironment()
 model = Model(env)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 args = {
-    "num_searches": 1000,
-    "C": 0.8, # Exploitation vs exploration 0 is pure greed (exploitation), a high number is more exploration. we likely want to leand toward exploitation due to the branching factor of the game
-    'num_iterations': 100,
-    'num_self_play_iterations': 100,
-    'num_battles_per_self_play': 20,
-    'num_epochs': 4,
+    "num_searches": 2,#25,
+    "C": 0.5, # Exploitation vs exploration 0 is pure greed (exploitation), a high number is more exploration. we likely want to leand toward exploitation due to the branching factor of the game
+    'num_iterations': 2,#50,
+    'num_self_play_iterations': 2,#25,
+    'num_battles_per_self_play': 2,#10,
+    'num_epochs': 2,#5,
     'batch_size': 32
 }
-save_folder = "alphaVGC_zero_weights"
 agent = AlphaVGCZero(model, optimizer, env, args)
 agent.learn()
