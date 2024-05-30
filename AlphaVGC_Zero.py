@@ -113,10 +113,11 @@ class Node:
 
 # Only use MCTS for the battle phase        
 class MonteCarloTreeSearch:
-    def __init__(self, game, args, model):
+    def __init__(self, game, args, model, device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
         self.game = game
         self.args = args
         self.model = model
+        self.device = device
 
     @torch.no_grad()
     def search(self, state, active_pokemon):
@@ -130,16 +131,16 @@ class MonteCarloTreeSearch:
 
             if not is_terminal:
                 self_policy, value = self.model(
-                    torch.tensor(node.state, dtype=torch.float32).unsqueeze(0).to(device)
+                    torch.tensor(node.state, dtype=torch.float32).unsqueeze(0).to(self.device)
                 )
                 team_pokemon_policy, _ = self.model(
-                    torch.tensor(self.game.battle.get_team_state_from_active_pokemon(active_pokemon), dtype=torch.float32).unsqueeze(0).to(device)
+                    torch.tensor(self.game.battle.get_team_state_from_active_pokemon(active_pokemon), dtype=torch.float32).unsqueeze(0).to(self.device)
                 )
                 opponent_1_policy, _ = self.model(
-                    torch.tensor(self.game.battle.get_opponent_state_from_active_pokemon(active_pokemon, 0), dtype=torch.float32).unsqueeze(0).to(device)
+                    torch.tensor(self.game.battle.get_opponent_state_from_active_pokemon(active_pokemon, 0), dtype=torch.float32).unsqueeze(0).to(self.device)
                 )
                 opponent_2_policy, _ = self.model(
-                    torch.tensor(self.game.battle.get_opponent_state_from_active_pokemon(active_pokemon, 1), dtype=torch.float32).unsqueeze(0).to(device)
+                    torch.tensor(self.game.battle.get_opponent_state_from_active_pokemon(active_pokemon, 1), dtype=torch.float32).unsqueeze(0).to(self.device)
                 )
                 self_policy = torch.softmax(self_policy, dim=-1).cpu().numpy().squeeze()#might be incorrect
                 team_pokemon_policy = torch.softmax(team_pokemon_policy, dim=-1).cpu().numpy().squeeze()
@@ -177,7 +178,7 @@ class MonteCarloTreeSearch:
         return action_probs
 
 class AlphaVGCZero:
-    def __init__(self, model, optimizer, game, args):
+    def __init__(self, model, optimizer, game, args, device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
         self.model = model
         self.optimizer = optimizer
         self.game = game
@@ -188,12 +189,14 @@ class AlphaVGCZero:
         self.selected_pokemon = []
         self.wins = 0
         self.memory = None
+        self.device = device
 
     def __repr__(self):
-        return "PokemonMasterAI PPO"
+        return "AlphaVGCZero"
 
     def choose_pokemon(self):
         self.team_pokemon = random.sample(POKEMON_ENTRIES, 6)
+        self.team = []
         for p in self.team_pokemon:
             p = p[0]
             moveset = random.sample(p.moves, 4)
@@ -204,19 +207,14 @@ class AlphaVGCZero:
         self.selected_pokemon = random.sample(self.team, 4)
 
     def choose_action(self, active_pokemon, available_actions):
-        opposing_player = self.game.battle._get_opposing_player(self)
-        battlefield = self.game.battle._get_battlefield_slots(self) + self.game.battle._get_battlefield_slots(opposing_player)
         if len(available_actions) == 0:
             return None
         all_switches = True
-        #if battlefield[0] == None and battlefield[1] == None:
-        #    exit()
         for a in available_actions:
             if a[0] != "switch":
                 all_switches = False
                 break
         if all_switches:
-            #return random.choice(available_actions)
             if active_pokemon == None:
                 state = self.game.battle.get_battle_state(self.selected_pokemon[0])
                 legal_actions = self.game.battle.get_legal_action_space(self.selected_pokemon[0], action_type="switch")
@@ -229,7 +227,7 @@ class AlphaVGCZero:
             legal_switches = legal_actions*switch_position
                 
             policy, _ = self.model(
-                    torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
+                    torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(self.device)
                 )
             policy = torch.softmax(policy, dim=-1).detach().cpu().numpy().squeeze()
             policy = policy * legal_switches
@@ -273,11 +271,11 @@ class AlphaVGCZero:
         for batchIDx in range(0, len(memory), self.args["batch_size"]):
             batch = memory[batchIDx:batchIDx+self.args["batch_size"]]
             states = torch.tensor([s for s, _, _ in batch], dtype=torch.float32)
-            states = states.to(device)
+            states = states.to(self.device)
             policies = torch.tensor([p for _, p, _ in batch], dtype=torch.float32)
-            policies = policies.to(device)
+            policies = policies.to(self.device)
             outcomes = torch.tensor([o for _, _, o in batch], dtype=torch.float32)
-            outcomes = outcomes.to(device)
+            outcomes = outcomes.to(self.device)
             self.optimizer.zero_grad()
             policy_preds, value_preds = self.model(states)
             policy_loss = -torch.sum(policies * torch.log(policy_preds)) # Maybe do cross entropy loss here
@@ -304,19 +302,21 @@ class AlphaVGCZero:
     def copy(self):
         return AlphaVGCZero(self.model, self.optimizer, self.game, self.args)
 
-env = PokemonEnvironment()
-model = Model(env)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-args = {
-    "num_searches": 5,#25,
-    "C": 0.5, # Exploitation vs exploration 0 is pure greed (exploitation), a high number is more exploration. we likely want to leand toward exploitation due to the branching factor of the game
-    'num_iterations': 1000,#50,
-    'num_self_play_iterations': 8,#25,
-    'num_battles_per_self_play': 10,#10,
-    'num_epochs': 5,#5,
-    'batch_size': 32
-}
-agent = AlphaVGCZero(model, optimizer, env, args)
-agent.learn()
+if __name__ == "__main__":
+    env = PokemonEnvironment()
+    model = Model(env)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    args = {
+        "num_searches": 5,#25,
+        "C": 0.5, # Exploitation vs exploration 0 is pure greed (exploitation), a high number is more exploration. we likely want to leand toward exploitation due to the branching factor of the game
+        'num_iterations': 1000,#50,
+        'num_self_play_iterations': 8,#25,
+        'num_battles_per_self_play': 10,#10,
+        'num_epochs': 5,#5,
+        'batch_size': 32
+    }
+    agent = AlphaVGCZero(model, optimizer, env, args, device)
+    agent.load_weights("model_2.pt")
+    agent.learn()
