@@ -13,6 +13,7 @@ class RandomPlayer:
 
     def choose_pokemon(self):
         self.team_pokemon = random.sample(POKEMON_ENTRIES, 6)
+        self.team = []
         for p in self.team_pokemon:
             p = p[0]
             moveset = random.sample(p.moves, 4)
